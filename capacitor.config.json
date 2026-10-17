@@ -1,5 +1,8 @@
 {
   "appId": "com.greg.carlog",
   "appName": "Car Log",
-  "webDir": "www"
+  "webDir": "www",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "force"
+  }
 }
