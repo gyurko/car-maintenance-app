@@ -59,6 +59,21 @@
       await LN.schedule({ notifications });
     } catch (e) { console.error('notification sync failed', e); }
   }
+  // ---------- app updates (Android): compare this build to the latest GitHub release ----------
+  const REPO = 'gyurko/car-maintenance-app';
+  let update = null; // { build, url } when a newer APK exists
+  async function checkUpdate() {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) throw new Error(r.status === 404 ? 'release feed not reachable (is the repo public?)' : 'HTTP ' + r.status);
+    const rel = await r.json();
+    const build = Number(String(rel.tag_name).replace(/\D/g, ''));
+    const asset = (rel.assets || []).find(a => /\.apk$/i.test(a.name));
+    update = asset && build > (window.BUILD || 0) ? { build, url: asset.browser_download_url } : null;
+    return update;
+  }
+  const openUpdate = () => window.open(update.url, '_system');
+  if (LN) checkUpdate().then(() => { if (update && /^#?\/?$/.test(location.hash)) rerender(); }).catch(() => {});
+
   const uid = () => Math.random().toString(36).slice(2, 10);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = n => n == null || n === '' ? '—' : Number(n).toLocaleString();
@@ -82,6 +97,7 @@
     const now = L.today();
     const stale = L.staleCars(state.cars, state.items, now, state.settings.promptDays);
     let html = '<h1>Dashboard</h1>';
+    if (update) html += `<div class="card banner row"><div><b>Update available</b><div class="muted">Build ${update.build} (you have ${window.BUILD || 0}).</div></div><button class="primary" id="doUpdate">Download</button></div>`;
     if (!state.cars.length) html += '<div class="card">No cars yet. <a href="#/cars">Add your first car</a> to get started.</div>';
     stale.forEach(c => {
       const pts = L.readings(c, state.items), last = pts[pts.length - 1];
@@ -95,6 +111,7 @@
     if (!rems.length) html += '<div class="card muted">No reminders set. Add a maintenance record with a reminder and it will show up here.</div>';
     rems.forEach(r => { html += reminderCard(r, true); });
     $view.innerHTML = html;
+    const du = document.getElementById('doUpdate'); if (du) du.onclick = openUpdate;
     $view.querySelectorAll('.banner form').forEach(f => f.addEventListener('submit', e => {
       e.preventDefault();
       addReading(f.dataset.car, f.querySelector('input').value);
@@ -304,6 +321,9 @@
       <div class="card"><b>Notifications</b>
         <div class="muted">Status: ${perm}. In the browser, notifications only appear while this page is open. The Android app will schedule them in the background.</div>
         <div class="actions" style="margin-top:8px"><button id="perm">Enable notifications</button><button id="testn">Send test notification</button></div></div>
+      <div class="card"><b>App version</b>
+        <div class="muted">Build ${window.BUILD || 'dev'}${LN ? '' : ' (updates apply to the Android app)'}</div>
+        <div class="actions" style="margin-top:8px"><button id="upd">Check for updates</button></div><div class="muted" id="updmsg"></div></div>
       <div class="card"><b>Backup</b>
         <div class="muted">Data is stored in this browser. Export a copy now and then.</div>
         <div class="actions" style="margin-top:8px"><button id="exp">Export JSON</button><button id="imp">Import JSON</button>
@@ -312,6 +332,11 @@
         <div class="actions" style="margin-top:8px"><button id="demo">Load sample data</button><button class="danger" id="wipe">Erase everything</button></div></div>`;
     document.getElementById('pdays').onchange = e => { state.settings.promptDays = Math.max(1, Number(e.target.value) || 30); save(); };
     document.getElementById('cday').onchange = e => { state.settings.checkinDay = Math.min(28, Math.max(1, Number(e.target.value) || 1)); save(); };
+    document.getElementById('upd').onclick = async () => {
+      const m = document.getElementById('updmsg'); m.textContent = 'Checking…';
+      try { await checkUpdate(); if (update) { m.innerHTML = `Build ${update.build} is available. <button class="small primary" id="getupd">Download</button>`; document.getElementById('getupd').onclick = openUpdate; } else m.textContent = 'You are on the latest build.'; }
+      catch (e) { m.textContent = 'Could not check: ' + e.message; }
+    };
     document.getElementById('perm').onclick = async () => {
       if (LN) { await LN.requestPermissions(); syncNative(); settingsView(); }
       else if ('Notification' in window) { await Notification.requestPermission(); settingsView(); }

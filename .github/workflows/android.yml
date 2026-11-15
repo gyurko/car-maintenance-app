@@ -22,6 +22,12 @@ jobs:
           java-version: 21
       - name: Install dependencies
         run: npm install
+      - name: Stamp build number
+        run: echo "window.BUILD = ${{ github.run_number }};" > www/version.js
+      - name: Use the fixed signing key (so new APKs install over old ones)
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
       - name: Generate Android project
         run: |
           npx cap add android
