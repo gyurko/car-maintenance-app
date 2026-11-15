@@ -243,9 +243,10 @@
     return key ? PRESETS[key] : null;
   }
 
-  function itemDialog(carId, item, presetType) {
+  function itemDialog(carId, item, presetType, prefill) {
     const editing = !!item;
-    item = item || { type: presetType || '', date: L.today(), mileage: '', notes: '', cost: '', reminder: null };
+    item = item || { type: presetType || '', date: L.today(), mileage: '', notes: '', cost: '', reminder: null, ...(prefill || {}) };
+    const hint = prefill && prefill.hint;
     const rem = item.reminder || {};
     const car = state.cars.find(c => c.id === carId);
     if (!editing && item.mileage === '') {
@@ -254,6 +255,7 @@
     }
     const known = knownTypes();
     $dlg.innerHTML = `<form method="dialog" id="f"><h2>${editing ? 'Edit' : 'Add'} maintenance</h2>
+      ${hint ? `<div class="card banner">${esc(hint)}</div>` : ''}
       <label>What was done</label><input name="type" list="types" value="${esc(item.type)}" required placeholder="Oil change, new tires…">
       <datalist id="types">${known.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
       <div class="two"><div><label>Date</label><input type="date" name="date" value="${item.date}" required></div>
@@ -281,6 +283,13 @@
       };
       if (editing) Object.assign(item, data); else state.items.push({ id: uid(), carId, ...data });
       save(); $dlg.close(); rerender();
+      // New tires installed: offer to log a tire rotation (with its reminder) right away.
+      if (!editing && data.type.toLowerCase() === 'new tires') {
+        itemDialog(carId, null, 'Tire rotation', {
+          date: data.date, mileage: data.mileage,
+          hint: 'You added new tires. Add a tire rotation record so you get reminded when the first rotation is due — or Cancel to skip.',
+        });
+      }
     };
   }
 
