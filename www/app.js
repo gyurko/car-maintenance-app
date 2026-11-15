@@ -317,7 +317,17 @@
       else if ('Notification' in window) { await Notification.requestPermission(); settingsView(); }
     };
     document.getElementById('testn').onclick = () => notify('Car Log', 'Time to enter the mileage for your cars.');
-    document.getElementById('exp').onclick = () => {
+    document.getElementById('exp').onclick = async () => {
+      const json = JSON.stringify(state, null, 2), name = `car-log-${L.today()}.json`;
+      const P = window.Capacitor && window.Capacitor.Plugins;
+      // Android WebView can't download blob links, so write a file and open the share sheet (save to Drive, email, etc.).
+      if (LN && P && P.Filesystem && P.Share) {
+        try {
+          const r = await P.Filesystem.writeFile({ path: name, data: json, directory: 'CACHE', encoding: 'utf8' });
+          await P.Share.share({ title: name, files: [r.uri], dialogTitle: 'Save backup' });
+        } catch (e) { if (!/cancel/i.test(String(e && e.message || e))) alert('Export failed: ' + (e && e.message || e)); }
+        return;
+      }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
       a.download = `car-log-${L.today()}.json`; a.click();
